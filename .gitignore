@@ -1,5 +1,5 @@
 /ChatHook Container/# backup
 /ChatHook Container/chathook/target
-#/ChatHook Container/.env
+/ChatHook Container/.env
 /Server/ChatHook/bin/udp_src/target
 /Server/ChatHook/# backup
