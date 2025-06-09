@@ -5,13 +5,13 @@ services:
 
     container_name: "beammp.chathook"
     ports:
-      - 172.17.0.1:30813:30813/udp
-      #- 30813:30813/udp
+      - 172.17.0.1:${UDP_PORT}:30813/udp
+      #- ${UDP_PORT}:30813/udp
     network_mode: bridge
     restart: unless-stopped
     environment:
       - WEBHOOK_URL=${WEBHOOK_URL}
-      - UDP_PORT=${UDP_PORT}
+      - UDP_PORT=30813
       
     volumes:
       - "./chathook:/chathook"
