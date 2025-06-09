@@ -1,3 +1,4 @@
+-- Made by Neverless @ BeamMP. Issues? Feel free to ask.
 --[[
 	Windows/Linux must unfortunately be seperated atm.
 	

@@ -1,3 +1,4 @@
+-- Made by Neverless @ BeamMP. Issues? Feel free to ask.
 local Base64 = require("libs/base64")
 
 local M = {

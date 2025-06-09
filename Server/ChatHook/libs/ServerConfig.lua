@@ -1,3 +1,4 @@
+-- Made by Neverless @ BeamMP. Issues? Feel free to ask.
 local toml = require("libs/toml") -- requires a edited Toml encoder that does not convert / to /\
 local ServerConfig = {
 	version = "0.1",
