@@ -1,4 +1,5 @@
 -- Made by Neverless @ BeamMP. Issues? Feel free to ask.
+local VERSION = "0.1" -- 09.06.2025 (DD.MM.YYYY)
 
 package.loaded["libs/Build"] = nil
 package.loaded["libs/UDPClient"] = nil
@@ -8,8 +9,8 @@ local Build = require("libs/Build")
 local UDPClient = require("libs/UDPClient")
 local ServerConfig = require("libs/ServerConfig")
 
-local BOT_IP = "172.17.0.1"
-local BOT_PORT = 30813
+local CHATHOOK_IP = "172.17.0.1"
+local UDP_PORT = 30813
 
 local Socket = nil
 
@@ -63,7 +64,7 @@ function onInit()
 		return
 	end
 	
-	Socket = UDPClient(bin_path, BOT_IP, BOT_PORT)
+	Socket = UDPClient(bin_path, CHATHOOK_IP, UDP_PORT)
 	
 	Build.setServerName(ServerConfig.Get("General", "Name"))
 	
