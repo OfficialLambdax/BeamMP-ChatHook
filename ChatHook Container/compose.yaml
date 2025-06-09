@@ -1,0 +1,22 @@
+services:
+  beammp_chathook:
+    build:
+      context: .
+
+    container_name: "beammp.chathook"
+    ports:
+      - 172.17.0.1:30813:30813/udp
+      #- 30813:30813/udp
+    network_mode: bridge
+    restart: unless-stopped
+    environment:
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - UDP_PORT=${UDP_PORT}
+      
+    volumes:
+      - "./chathook:/chathook"
+      
+    deploy:
+      resources:
+        limits:
+          memory: 1G

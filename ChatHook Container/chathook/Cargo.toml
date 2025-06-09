@@ -1,0 +1,19 @@
+[package]
+name = "chathook"
+version = "0.1.0"
+edition = "2024"
+
+[profile.release]
+opt-level = 3       # Optimize for speed
+overflow-checks = false     # Disable integer overflow checks.
+lto = true          # Enable link-time optimization
+codegen-units = 1   # Reduce number of codegen units to increase optimizations
+panic = 'abort'     # Abort on panic
+strip = true        # Strip symbols from binary*
+
+[dependencies]
+discord-webhook-rs = "1.0.5"
+anyhow = "1.0.98"
+jzon = "0.12.5"
+reqwest = {version = "0.12.19", features = ["blocking"]}
+base64 = "0.22.1"

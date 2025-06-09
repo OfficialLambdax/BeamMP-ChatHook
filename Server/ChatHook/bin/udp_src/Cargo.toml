@@ -1,0 +1,15 @@
+[package]
+name = "udp"
+version = "0.1.0"
+edition = "2024"
+
+[profile.release]
+opt-level = 3       # Optimize for speed
+overflow-checks = false     # Disable integer overflow checks.
+lto = true          # Enable link-time optimization
+codegen-units = 1   # Reduce number of codegen units to increase optimizations
+panic = 'abort'     # Abort on panic
+strip = true        # Strip symbols from binary*
+
+[dependencies]
+anyhow = "1.0.98"
