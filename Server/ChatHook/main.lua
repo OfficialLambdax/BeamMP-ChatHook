@@ -1,19 +1,29 @@
 -- Made by Neverless @ BeamMP. Issues? Feel free to ask.
-local VERSION = "0.1" -- 09.06.2025 (DD.MM.YYYY)
+local VERSION = "0.1" -- 10.06.2025 (DD.MM.YYYY)
+local SCRIPT_REF = "ChatHook"
 
 package.loaded["libs/Build"] = nil
 package.loaded["libs/UDPClient"] = nil
 package.loaded["libs/ServerConfig"] = nil
+package.loaded["libs/PlayerCount"] = nil
+package.loaded["libs/colors"] = nil
+package.loaded["libs/Log"] = nil
 
 local Build = require("libs/Build")
 local UDPClient = require("libs/UDPClient")
 local ServerConfig = require("libs/ServerConfig")
+local PlayerCount = require("libs/PlayerCount")
+local Color = require("libs/colors")
+local Log = require("libs/Log").setCollectMode(true)
 
 local CHATHOOK_IP = "172.17.0.1"
 --local CHATHOOK_IP = "127.0.0.1"
 local UDP_PORT = 30813
 
 local Socket = nil
+
+local IS_START = _G.IS_START == nil
+_G.IS_START = true
 
 -- ----------------------------------------------------------------------
 -- Common
@@ -39,6 +49,12 @@ local function myPath()
 end
 
 -- ----------------------------------------------------------------------
+-- Buf print
+function bufPrint()
+	Log.printCollect()
+end
+
+-- ----------------------------------------------------------------------
 -- Event stuff
 function onChatMessage(player_id, player_name, message)
 	if message:len() == 0 or message:sub(1, 1) == '/' then return end
@@ -46,54 +62,96 @@ function onChatMessage(player_id, player_name, message)
 end
 
 function onScriptMessage(message)
+	if message == nil or message:len() == 0 then return end
 	Socket:send(Build.scriptMessage(message))
 end
 
 function onPlayerJoin(player_id)
+	PlayerCount.add(player_id)
 	Socket:send(Build.playerJoin(player_id))
 end
 
 function onPlayerDisconnect(player_id)
+	PlayerCount.remove(player_id)
 	Socket:send(Build.playerLeft(player_id))
-end
-
-function onLoad()
-	Socket:send(Build.serverOnline())
-end
-
-function onReload()
-	Socket:send(Build.serverReload())
 end
 
 -- ----------------------------------------------------------------------
 -- Init
 function onInit()
-	local bin_path = myPath() .. "bin/udp"
-	local os_name = MP.GetOSName()
-	if os_name == "Windows" then
-		bin_path = bin_path .. '.exe'
-		
-	elseif os_name == "Linux" then
-		os.execute('chmod +x "' .. bin_path .. '"')
-		
-	else
-		print('ChatHook. Error. Unsupported Plattform')
+	MP.CancelEventTimer("chathook_bufprint")
+	MP.RegisterEvent("chathook_bufprint", "bufPrint")
+	MP.CreateEventTimer("chathook_bufprint", 1000)
+	
+	Log.load("====. Loading ChatHook .====", SCRIPT_REF)
+	Log.load("> Version: " .. VERSION, SCRIPT_REF)
+	Log.load("> Build Packet Version: " .. Build.VERSION, SCRIPT_REF)
+	Log.info("^ ^n(This must match with the ChatHook Container version)^r", SCRIPT_REF)
+	
+	-- eval server config parameters
+	local server_name = ServerConfig.Get("General", "Name")
+	if server_name == nil or server_name:len() == 0 then
+		Log.fatal('Server doesnt contain a server name or has no ServerConfig.toml', SCRIPT_REF)
 		return
 	end
 	
-	Socket = UDPClient(bin_path, CHATHOOK_IP, UDP_PORT)
+	local max_players = ServerConfig.Get("General", "MaxPlayers")
+	if max_players == nil then
+		Log.fatal('Server doesnt contain a MaxPlayers value or has no ServerConfig.toml', SCRIPT_REF)
+		return
+	end
 	
-	Build.setServerName(ServerConfig.Get("General", "Name"))
-	Build.setMaxPlayers(ServerConfig.Get("General", "MaxPlayers"))
+	Log.ok('> Server Name: ' .. Color.convertToConsole(server_name), SCRIPT_REF)
+	Log.ok('> Max Players: ' .. max_players, SCRIPT_REF)
+	Build.setServerName(server_name)
+	Build.setMaxPlayers(max_players)
+	
+	-- eval udp bin
+	local bin_path = myPath() .. "bin/udp"
+	local os_name = MP.GetOSName()
+	Log.info('> Operating System: ' .. os_name, SCRIPT_REF)
+	if os_name == "Windows" then
+		Log.load('> Applying Windows patch', SCRIPT_REF)
+		bin_path = bin_path .. '.exe'
+		
+	elseif os_name == "Linux" then
+		Log.load('> Applying Linux patch', SCRIPT_REF)
+		os.execute('chmod +x "' .. bin_path .. '"')
+		
+	else
+		Log.fatal('Unsupported Operating System', SCRIPT_REF)
+		return
+	end
+	if not FS.Exists(bin_path) then
+		Log.fatal('Cannot find udp binary in "' .. bin_path .. '"', SCRIPT_REF)
+		return
+	end
+	
+	Log.load('> Building UDPSocket for ' .. CHATHOOK_IP .. ':' .. UDP_PORT, SCRIPT_REF)
+	Socket = UDPClient(bin_path, CHATHOOK_IP, UDP_PORT)
+	if Socket == nil then
+		Log.fatal('Cannot create UDPSocket', SCRIPT_REF)
+		return
+	end
+	Log.ok('> Initizalized UDPSocket', SCRIPT_REF)
 	
 	MP.RegisterEvent("onChatMessage", "onChatMessage")
 	MP.RegisterEvent("onPlayerJoin", "onPlayerJoin")
 	MP.RegisterEvent("onPlayerDisconnect", "onPlayerDisconnect")
 	MP.RegisterEvent("onScriptMessage", "onScriptMessage")
 	
-	if tableSize(MP.GetPlayers() or {}) == 0 then
-		onLoad()
+	if IS_START then
+		Socket:send(Build.serverOnline())
 	else
-		onReload()
+		Socket:send(Build.serverReload())
 	end
+	
+	-- hotreload
+	for player_id, player_name in pairs(MP.GetPlayers() or {}) do
+		PlayerCount.add(player_id)
+		Log.ok('Hotreloaded "' .. player_name .. '"', SCRIPT_REF)
+	end
+	
+	Log.load("=====. ChatHook Loaded .====", SCRIPT_REF)
+	Log.printCollect()
 end

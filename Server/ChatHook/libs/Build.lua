@@ -1,9 +1,11 @@
 -- Made by Neverless @ BeamMP. Issues? Feel free to ask.
 local Base64 = require("libs/base64")
+local PlayerCount = require("libs/PlayerCount")
 
 local M = {
 	SERVER_NAME = "",
 	MAX_PLAYERS = 0,
+	VERSION = 1,
 }
 
 local function tableSize(table)
@@ -21,8 +23,9 @@ end
 local function baseBuild()
 	return {
 		server_name = M.SERVER_NAME,
-		player_count = tableSize(MP.GetPlayers() or {}),
-		player_max = M.MAX_PLAYERS
+		player_count = PlayerCount.count(),
+		player_max = M.MAX_PLAYERS,
+		version = M.VERSION
 	}
 end
 
@@ -80,15 +83,6 @@ M.playerJoin = function(player_id)
 		type = 3,
 		content = {
 			player_name = MP.GetPlayerName(player_id)
-		}
-	}))
-end
-
-M.playerJoinC = function(player_name)
-	return wrap(base({
-		type = 3,
-		content = {
-			player_name = player_name
 		}
 	}))
 end

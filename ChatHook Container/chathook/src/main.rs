@@ -11,13 +11,8 @@ use discord_webhook_rs as webhook;
 use webhook::{Webhook, Embed, Field};
 
 const AVATAR_URL: &str = "https://apache.neverless.dev/random/dc_logo.jpg";
+const VERSION: u8 = 1;
 
-/*
-	Format
-	[type] = int
-	[server_name] = string
-	[content] = object any
-*/
 struct Message {
 	pub m_type: i32,
 	pub from_server: String,
@@ -50,6 +45,7 @@ fn main() -> Result<()> {
 	let webhook_url = env::var("WEBHOOK_URL").unwrap();
 	let udp_port: u16 = env::var("UDP_PORT").unwrap().parse::<u16>().unwrap();
 
+	println!("Version {}", VERSION);
 	println!("Listening to 0.0.0.0:{}", &udp_port);
 	println!("Sending to: {}", &webhook_url);
 
@@ -58,7 +54,8 @@ fn main() -> Result<()> {
 	let socket = openUdpListener(udp_port, false)?;
 
 	let _ = defaultWebhookHeader(&webhook_url)
-		.content(&format!("🌺 ***Hello from BeamMP ChatHook o/***"))
+		//.content(&format!("### 🌺 [*Hello from BeamMP ChatHook v{}*](https://github.com/OfficialLambdax/BeamMP-ChatHook) o/", VERSION))
+		.content(&format!("### 🌺 Hello from [*BeamMP ChatHook*](https://github.com/OfficialLambdax/BeamMP-ChatHook) v{} o/", VERSION))
 		.send(); // we let it fail
 
 	loop {
@@ -167,7 +164,7 @@ fn sendPlayerJoin(webhook_url: &str, message: &Message, player: PlayerJoin) -> R
 fn sendPlayerLeft(webhook_url: &str, message: &Message, player: PlayerLeft) -> Result<(), webhook::Error> {
 	let mut content = String::new();
 	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
-	content.push_str(&format!("> - 🕵️ ***{}** left*", &player.player_name));
+	content.push_str(&format!("> - 🕵️ ***{}** left ({}/{})*", &player.player_name, &message.player_count, &message.player_max));
 	defaultWebhookHeader(webhook_url)
 		.content(content)
 		.send()?;
@@ -252,8 +249,13 @@ fn evalProfilePicture(player_name: &str, profile_cache: &mut HashMap<String, Str
 fn decodeReceive(message: &str) -> Result<Message> {
 	let decode = jzon::parse(message)?;
 	if !decode.is_object() {return Err(anyhow!("Message is not of type objects"))}
-	if !decode["type"].is_number() || !decode["server_name"].is_string() || !decode["player_count"].is_number() | !decode["player_max"].is_number() {
-		return Err(anyhow!("Invalid message pack format"));
+	if !decode["type"].is_number() || !decode["server_name"].is_string() || !decode["player_count"].is_number() || !decode["player_max"].is_number() || !decode["version"].is_number() {
+		return Err(anyhow!("Invalid message pack format: {}", message));
+	}
+
+	let version = decode["version"].as_u8().unwrap();
+	if version != VERSION {
+		return Err(anyhow!("Invalid message pack version: {}", message));
 	}
 
 	Ok(Message{
