@@ -31,6 +31,13 @@ M.serverOnline = function()
 	})
 end
 
+M.serverReload = function()
+	return wrap({
+		type = 5,
+		server_name = M.SERVER_NAME
+	})
+end
+
 M.playerJoin = function(player_id)
 	return wrap({
 		type = 3,

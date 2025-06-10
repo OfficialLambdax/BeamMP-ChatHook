@@ -10,12 +10,21 @@ local UDPClient = require("libs/UDPClient")
 local ServerConfig = require("libs/ServerConfig")
 
 local CHATHOOK_IP = "172.17.0.1"
+local CHATHOOK_IP = "127.0.0.1"
 local UDP_PORT = 30813
 
 local Socket = nil
 
 -- ----------------------------------------------------------------------
 -- Common
+local function tableSize(table)
+	local size = 0
+	for _, _ in pairs(table) do
+		size = size + 1
+	end
+	return size
+end
+
 local function filePath(string)
 	local _, pos = string:find(".*/")
 	if pos == nil then return nil end
@@ -48,6 +57,10 @@ function onLoad()
 	Socket:send(Build.serverOnline())
 end
 
+function onReload()
+	Socket:send(Build.serverReload())
+end
+
 -- ----------------------------------------------------------------------
 -- Init
 function onInit()
@@ -71,5 +84,10 @@ function onInit()
 	MP.RegisterEvent("onChatMessage", "onChatMessage")
 	MP.RegisterEvent("onPlayerJoin", "onPlayerJoin")
 	MP.RegisterEvent("onPlayerDisconnect", "onPlayerDisconnect")
-	onLoad()
+	
+	if tableSize(MP.GetPlayers() or {}) == 0 then
+		onLoad()
+	else
+		onReload()
+	end
 end

@@ -114,6 +114,11 @@ fn handleMessage(webhook_url: &str, mut message: Message, last_server_name: &mut
 				eprintln!("Invalid format for player left from {}", &message.from_server);
 			}
 		}
+		5 => {
+			if let Err(e) = sendServerReload(webhook_url, &message) {
+				eprintln!("{:?}", e);
+			}
+		}
 		_ => {
 			eprintln!("Invalid Option from {}", &message.from_server)
 		}
@@ -175,11 +180,22 @@ fn sendChatMessage(webhook_url: &str, message: &Message, chat: Chat) -> Result<(
 fn sendServerOnline(webhook_url: &str, message: &Message) -> Result <(), webhook::Error> {
 	let mut content = String::new();
 	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
-	content.push_str(&format!("## ✅ **Server has just (re)started!**"));
+	content.push_str(&format!("## ✅ Server has just (re)started!"));
 	defaultWebhookHeader(webhook_url)
 		.content(content)
 		.send()?;
 	
+	Ok(())
+}
+
+fn sendServerReload(webhook_url: &str, message: &Message) -> Result<(), webhook::Error> {
+	let mut content = String::new();
+	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
+	content.push_str(&format!("## ♻️ Server side script has reloaded"));
+	defaultWebhookHeader(webhook_url)
+		.content(content)
+		.send()?;
+
 	Ok(())
 }
 
