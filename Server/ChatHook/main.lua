@@ -10,7 +10,7 @@ local UDPClient = require("libs/UDPClient")
 local ServerConfig = require("libs/ServerConfig")
 
 local CHATHOOK_IP = "172.17.0.1"
-local CHATHOOK_IP = "127.0.0.1"
+--local CHATHOOK_IP = "127.0.0.1"
 local UDP_PORT = 30813
 
 local Socket = nil
@@ -43,6 +43,10 @@ end
 function onChatMessage(player_id, player_name, message)
 	if message:len() == 0 or message:sub(1, 1) == '/' then return end
 	Socket:send(Build.playerMessage(player_id, message))
+end
+
+function onScriptMessage(message)
+	Socket:send(Build.scriptMessage(message))
 end
 
 function onPlayerJoin(player_id)
@@ -80,10 +84,12 @@ function onInit()
 	Socket = UDPClient(bin_path, CHATHOOK_IP, UDP_PORT)
 	
 	Build.setServerName(ServerConfig.Get("General", "Name"))
+	Build.setMaxPlayers(ServerConfig.Get("General", "MaxPlayers"))
 	
 	MP.RegisterEvent("onChatMessage", "onChatMessage")
 	MP.RegisterEvent("onPlayerJoin", "onPlayerJoin")
 	MP.RegisterEvent("onPlayerDisconnect", "onPlayerDisconnect")
+	MP.RegisterEvent("onScriptMessage", "onScriptMessage")
 	
 	if tableSize(MP.GetPlayers() or {}) == 0 then
 		onLoad()

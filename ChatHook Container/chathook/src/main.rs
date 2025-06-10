@@ -21,15 +21,16 @@ const AVATAR_URL: &str = "https://apache.neverless.dev/random/dc_logo.jpg";
 struct Message {
 	pub m_type: i32,
 	pub from_server: String,
+	pub player_count: i32,
+	pub player_max: i32,
 	pub add_server_name: bool,
 	pub content: jzon::object::Object,
 }
 
-/*
-	Format
-	[player_name] = string
-	[chat_message] = string
-*/
+struct ScriptMessage {
+	pub chat_message: String,
+}
+
 struct Chat {
 	pub player_name: String,
 	pub chat_message: String,
@@ -119,6 +120,15 @@ fn handleMessage(webhook_url: &str, mut message: Message, last_server_name: &mut
 				eprintln!("{:?}", e);
 			}
 		}
+		6 => {
+			if let Ok(chat) = decodeScriptMessage(&message) {
+				if let Err(e) = sendScriptMessage(webhook_url, &message, chat) {
+					eprintln!("{:?}", e);
+				}
+			} else {
+				eprintln!("Invalid format for chat message from {}", &message.from_server);
+			}
+		}
 		_ => {
 			eprintln!("Invalid Option from {}", &message.from_server)
 		}
@@ -147,7 +157,7 @@ fn sendPlayerJoin(webhook_url: &str, message: &Message, player: PlayerJoin) -> R
 				.add_field(
 					Field::new()
 						.name("🧡 New Player Join!")
-						.value(format!("→ [{}](https://forum.beammp.com/u/{})", &player.player_name, &player.player_name))
+						.value(format!("→ [{}](https://forum.beammp.com/u/{})\n\n-# {}/{} Players", &player.player_name, &player.player_name, &message.player_count, &message.player_max))
 				)
 		).send()?;
 
@@ -175,6 +185,17 @@ fn sendChatMessage(webhook_url: &str, message: &Message, chat: Chat) -> Result<(
 
 
     Ok(())
+}
+
+fn sendScriptMessage(webhook_url: &str, message: &Message, chat: ScriptMessage) -> Result<(), webhook::Error> {
+	let mut content = String::new();
+	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
+	content.push_str(&format!("> - ⚙️ **Server:** {}", &chat.chat_message));
+	defaultWebhookHeader(webhook_url)
+		.content(content)
+		.send()?;
+
+	Ok(())
 }
 
 fn sendServerOnline(webhook_url: &str, message: &Message) -> Result <(), webhook::Error> {
@@ -231,14 +252,16 @@ fn evalProfilePicture(player_name: &str, profile_cache: &mut HashMap<String, Str
 fn decodeReceive(message: &str) -> Result<Message> {
 	let decode = jzon::parse(message)?;
 	if !decode.is_object() {return Err(anyhow!("Message is not of type objects"))}
-	if !decode["type"].is_number() && !decode["server_name"].is_string() {
-		return Err(anyhow!("Invalid format"));
+	if !decode["type"].is_number() || !decode["server_name"].is_string() || !decode["player_count"].is_number() | !decode["player_max"].is_number() {
+		return Err(anyhow!("Invalid message pack format"));
 	}
 
 	Ok(Message{
 		m_type: decode["type"].as_i32().unwrap(),
 		add_server_name: false,
 		from_server: cleanseString(decode["server_name"].as_str().unwrap()),
+		player_count: decode["player_count"].as_i32().unwrap(),
+		player_max: decode["player_max"].as_i32().unwrap(),
 		content: decode["content"].as_object().unwrap_or(&jzon::object::Object::new()).to_owned()
 	})
 }
@@ -251,6 +274,15 @@ fn decodeChatMessage(message: &Message) -> Result<Chat, ()> {
 
 	Ok(Chat{
 		player_name: content["player_name"].as_str().unwrap().to_string(),
+		chat_message: content["chat_message"].as_str().unwrap().replace("@", "")
+	})
+}
+
+fn decodeScriptMessage(message: &Message) -> Result<ScriptMessage, ()> {
+	let content = &message.content;
+	if !content["chat_message"].is_string() {return Err(())}
+
+	Ok(ScriptMessage {
 		chat_message: content["chat_message"].as_str().unwrap().replace("@", "")
 	})
 }
