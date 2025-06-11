@@ -11,18 +11,23 @@ use discord_webhook_rs as webhook;
 use webhook::{Webhook, Embed, Field};
 
 const AVATAR_URL: &str = "https://apache.neverless.dev/random/dc_logo.jpg";
-const VERSION: u8 = 1;
+const VERSION: u8 = 2;
 
-struct Message {
-	pub m_type: i32,
+struct Messages {
 	pub from_server: String,
 	pub player_count: i32,
 	pub player_max: i32,
 	pub add_server_name: bool,
+	pub contents: Vec<Content>,
+}
+
+struct Content {
+	pub m_type: i64,
 	pub content: jzon::object::Object,
 }
 
 struct ScriptMessage {
+	pub script_ref: String,
 	pub chat_message: String,
 }
 
@@ -54,15 +59,32 @@ fn main() -> Result<()> {
 	let socket = openUdpListener(udp_port, false)?;
 
 	let _ = defaultWebhookHeader(&webhook_url)
-		//.content(&format!("### 🌺 [*Hello from BeamMP ChatHook v{}*](https://github.com/OfficialLambdax/BeamMP-ChatHook) o/", VERSION))
 		.content(&format!("### 🌺 Hello from [*BeamMP ChatHook*](https://github.com/OfficialLambdax/BeamMP-ChatHook) v{} o/", VERSION))
 		.send(); // we let it fail
 
 	loop {
 		match udpTryReceive(&socket) {
 			Ok(receive) => {
-				match decodeReceive(&receive) {
-					Ok(message) => handleMessage(&webhook_url, message, &mut last_server_name, &mut profile_cache),
+				//println!("{}", &receive);
+				match decodeReceiveBuf(&receive) {
+					Ok(mut messages) => {
+						if last_server_name != messages.from_server {
+							messages.add_server_name = true;
+							last_server_name = messages.from_server.clone();
+						}
+
+						let mut script_buf = String::new();
+						for content in &messages.contents {
+							handleMessage(&webhook_url, &messages, &content, &mut profile_cache, &mut script_buf);
+						}
+
+						if script_buf.len() > 0 {
+							script_buf.pop();
+							if let Err(e) = defaultWebhookHeader(&webhook_url).content(script_buf).send() {
+								eprintln!("{:?}", e);
+							}
+						}
+					},
 					Err(e) => eprintln!("{}", e)
 				}
 			},
@@ -73,15 +95,11 @@ fn main() -> Result<()> {
 
 // --------------------------------------------------------------------------------
 // Handle and do stuff
-fn handleMessage(webhook_url: &str, mut message: Message, last_server_name: &mut String, profile_cache: &mut HashMap<String, String>) {
-	if *last_server_name != message.from_server {
-		message.add_server_name = true;
-		*last_server_name = message.from_server.clone();
-	}
-
-	match message.m_type {
+//fn handleMessage(webhook_url: &str, mut message: Message, last_server_name: &mut String, profile_cache: &mut HashMap<String, String>) {
+fn handleMessage(webhook_url: &str, message: &Messages, content: &Content, profile_cache: &mut HashMap<String, String>, script_buf: &mut String) {
+	match content.m_type {
 		1 => {
-			if let Ok(chat) = decodeChatMessage(&message) {
+			if let Ok(chat) = decodeChatMessage(&content) {
 				if let Err(e) = sendChatMessage(webhook_url, &message, chat) {
 					eprintln!("{:?}", e);
 				}
@@ -95,7 +113,7 @@ fn handleMessage(webhook_url: &str, mut message: Message, last_server_name: &mut
 			}
 		},
 		3 => {
-			if let Ok(player) = decodePlayerJoin(&message, profile_cache) {
+			if let Ok(player) = decodePlayerJoin(&content, profile_cache) {
 				if let Err(e) = sendPlayerJoin(webhook_url, &message, player) {
 					eprintln!("{:?}", e);
 				}
@@ -104,7 +122,7 @@ fn handleMessage(webhook_url: &str, mut message: Message, last_server_name: &mut
 			}
 		}
 		4 => {
-			if let Ok(player) = decodePlayerLeft(&message) {
+			if let Ok(player) = decodePlayerLeft(&content) {
 				if let Err(e) = sendPlayerLeft(webhook_url, &message, player) {
 					eprintln!("{:?}", e);
 				}
@@ -118,10 +136,8 @@ fn handleMessage(webhook_url: &str, mut message: Message, last_server_name: &mut
 			}
 		}
 		6 => {
-			if let Ok(chat) = decodeScriptMessage(&message) {
-				if let Err(e) = sendScriptMessage(webhook_url, &message, chat) {
-					eprintln!("{:?}", e);
-				}
+			if let Ok(chat) = decodeScriptMessage(&content) {
+				sendScriptMessage(&message, chat, script_buf)
 			} else {
 				eprintln!("Invalid format for chat message from {}", &message.from_server);
 			}
@@ -142,7 +158,7 @@ fn defaultWebhookHeader(webhook_url: &str) -> Webhook {
 		.avatar_url(AVATAR_URL)
 }
 
-fn sendPlayerJoin(webhook_url: &str, message: &Message, player: PlayerJoin) -> Result<(), webhook::Error> {
+fn sendPlayerJoin(webhook_url: &str, message: &Messages, player: PlayerJoin) -> Result<(), webhook::Error> {
 	let mut content = String::new();
 	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
 	defaultWebhookHeader(webhook_url)
@@ -161,7 +177,7 @@ fn sendPlayerJoin(webhook_url: &str, message: &Message, player: PlayerJoin) -> R
 	Ok(())
 }
 
-fn sendPlayerLeft(webhook_url: &str, message: &Message, player: PlayerLeft) -> Result<(), webhook::Error> {
+fn sendPlayerLeft(webhook_url: &str, message: &Messages, player: PlayerLeft) -> Result<(), webhook::Error> {
 	let mut content = String::new();
 	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
 	content.push_str(&format!("> - 🕵️ ***{}** left ({}/{})*", &player.player_name, &message.player_count, &message.player_max));
@@ -172,7 +188,7 @@ fn sendPlayerLeft(webhook_url: &str, message: &Message, player: PlayerLeft) -> R
 	Ok(())
 }
 
-fn sendChatMessage(webhook_url: &str, message: &Message, chat: Chat) -> Result<(), webhook::Error> {
+fn sendChatMessage(webhook_url: &str, message: &Messages, chat: Chat) -> Result<(), webhook::Error> {
 	let mut content = String::new();
 	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
 	content.push_str(&format!("> - 💬 **{}:** {}", &chat.player_name, &chat.chat_message));
@@ -184,18 +200,17 @@ fn sendChatMessage(webhook_url: &str, message: &Message, chat: Chat) -> Result<(
     Ok(())
 }
 
-fn sendScriptMessage(webhook_url: &str, message: &Message, chat: ScriptMessage) -> Result<(), webhook::Error> {
+fn sendScriptMessage(message: &Messages, chat: ScriptMessage, script_buf: &mut String)  {
 	let mut content = String::new();
 	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
-	content.push_str(&format!("> - ⚙️ **Server:** {}", &chat.chat_message));
-	defaultWebhookHeader(webhook_url)
-		.content(content)
-		.send()?;
-
-	Ok(())
+	if chat.script_ref.len() == 0 {
+		script_buf.push_str(&format!("> - ⚙️ **Server:** {}\n", cleanseString(&chat.chat_message)));
+	} else {
+		script_buf.push_str(&format!("> - ⚙️ **{}:** {}\n", chat.script_ref, cleanseString(&chat.chat_message)));
+	}
 }
 
-fn sendServerOnline(webhook_url: &str, message: &Message) -> Result <(), webhook::Error> {
+fn sendServerOnline(webhook_url: &str, message: &Messages) -> Result <(), webhook::Error> {
 	let mut content = String::new();
 	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
 	content.push_str(&format!("## ✅ Server has just (re)started!"));
@@ -206,7 +221,7 @@ fn sendServerOnline(webhook_url: &str, message: &Message) -> Result <(), webhook
 	Ok(())
 }
 
-fn sendServerReload(webhook_url: &str, message: &Message) -> Result<(), webhook::Error> {
+fn sendServerReload(webhook_url: &str, message: &Messages) -> Result<(), webhook::Error> {
 	let mut content = String::new();
 	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
 	content.push_str(&format!("## ♻️ Server side script has reloaded"));
@@ -246,10 +261,10 @@ fn evalProfilePicture(player_name: &str, profile_cache: &mut HashMap<String, Str
 
 // --------------------------------------------------------------------------------
 // Decode
-fn decodeReceive(message: &str) -> Result<Message> {
+fn decodeReceiveBuf(message: &str) -> Result<Messages> {
 	let decode = jzon::parse(message)?;
-	if !decode.is_object() {return Err(anyhow!("Message is not of type objects"))}
-	if !decode["type"].is_number() || !decode["server_name"].is_string() || !decode["player_count"].is_number() || !decode["player_max"].is_number() || !decode["version"].is_number() {
+	if !decode.is_object() {return Err(anyhow!("Message is not of type object"))}
+	if !decode["server_name"].is_string() || !decode["player_count"].is_number() || !decode["player_max"].is_number() || !decode["version"].is_number() || !decode["contents"].is_array() {
 		return Err(anyhow!("Invalid message pack format: {}", message));
 	}
 
@@ -258,18 +273,29 @@ fn decodeReceive(message: &str) -> Result<Message> {
 		return Err(anyhow!("Invalid message pack version: {}", message));
 	}
 
-	Ok(Message{
-		m_type: decode["type"].as_i32().unwrap(),
-		add_server_name: false,
+	let array = decode["contents"].as_array().unwrap();
+	let mut contents: Vec<Content> = Vec::new();
+	for message in array {
+		if !message.is_object() || !message["type"].is_number() {return Err(anyhow!("Invalid message pack format: {}", message))}
+		contents.push(Content
+			{
+				m_type: message["type"].as_i64().unwrap(),
+				content: message["content"].as_object().unwrap_or(&jzon::object::Object::new()).to_owned()
+			}
+		);
+	}
+
+	Ok(Messages{
 		from_server: cleanseString(decode["server_name"].as_str().unwrap()),
 		player_count: decode["player_count"].as_i32().unwrap(),
 		player_max: decode["player_max"].as_i32().unwrap(),
-		content: decode["content"].as_object().unwrap_or(&jzon::object::Object::new()).to_owned()
+		add_server_name: false,
+		contents: contents,
 	})
 }
 
-fn decodeChatMessage(message: &Message) -> Result<Chat, ()> {
-	let content = &message.content;
+fn decodeChatMessage(content: &Content) -> Result<Chat, ()> {
+	let content = &content.content;
 	if !content["player_name"].is_string() && !content["chat_message"].is_string() {
 		return Err(())
 	}
@@ -280,17 +306,18 @@ fn decodeChatMessage(message: &Message) -> Result<Chat, ()> {
 	})
 }
 
-fn decodeScriptMessage(message: &Message) -> Result<ScriptMessage, ()> {
-	let content = &message.content;
-	if !content["chat_message"].is_string() {return Err(())}
+fn decodeScriptMessage(content: &Content) -> Result<ScriptMessage, ()> {
+	let content = &content.content;
+	if !content["chat_message"].is_string() || !content["script_ref"].is_string() {return Err(())}
 
 	Ok(ScriptMessage {
+		script_ref: content["script_ref"].as_str().unwrap().replace("@", ""),
 		chat_message: content["chat_message"].as_str().unwrap().replace("@", "")
 	})
 }
 
-fn decodePlayerJoin(message: &Message, profile_cache: &mut HashMap<String, String>) -> Result<PlayerJoin, ()> {
-	let content = &message.content;
+fn decodePlayerJoin(content: &Content, profile_cache: &mut HashMap<String, String>) -> Result<PlayerJoin, ()> {
+	let content = &content.content;
 	if !content["player_name"].is_string() {return Err(())}
 
 	let player_name = content["player_name"].as_str().unwrap();
@@ -310,8 +337,8 @@ fn decodePlayerJoin(message: &Message, profile_cache: &mut HashMap<String, Strin
 	})
 }
 
-fn decodePlayerLeft(message: &Message) -> Result<PlayerLeft, ()> {
-	let content = &message.content;
+fn decodePlayerLeft(content: &Content) -> Result<PlayerLeft, ()> {
+	let content = &content.content;
 	if !content["player_name"].is_string() {return Err(())}
 
 	Ok(PlayerLeft{

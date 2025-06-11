@@ -49,31 +49,49 @@ local function myPath()
 end
 
 -- ----------------------------------------------------------------------
+-- Buf
+local Buf = {_buf = {}}
+function Buf:add(build)
+	table.insert(self._buf, build)
+end
+
+function Buf:size()
+	return #self._buf
+end
+
+function Buf:take()
+	local ref = self._buf
+	self._buf = {}
+	return ref
+end
+
+-- ----------------------------------------------------------------------
 -- Buf print
 function bufPrint()
 	Log.printCollect()
+	if Buf:size() > 0 then Socket:send(Build.wrap(Buf:take())) end
 end
 
 -- ----------------------------------------------------------------------
 -- Event stuff
 function onChatMessage(player_id, player_name, message)
 	if message:len() == 0 or message:sub(1, 1) == '/' then return end
-	Socket:send(Build.playerMessage(player_id, message))
+	Buf:add(Build.playerMessage(player_id, message))
 end
 
-function onScriptMessage(message)
+function onScriptMessage(message, script_ref)
 	if message == nil or message:len() == 0 then return end
-	Socket:send(Build.scriptMessage(message))
+	Buf:add(Build.scriptMessage(script_ref, message))
 end
 
 function onPlayerJoin(player_id)
 	PlayerCount.add(player_id)
-	Socket:send(Build.playerJoin(player_id))
+	Buf:add(Build.playerJoin(player_id))
 end
 
 function onPlayerDisconnect(player_id)
 	PlayerCount.remove(player_id)
-	Socket:send(Build.playerLeft(player_id))
+	Buf:add(Build.playerLeft(player_id))
 end
 
 -- ----------------------------------------------------------------------
@@ -141,9 +159,9 @@ function onInit()
 	MP.RegisterEvent("onScriptMessage", "onScriptMessage")
 	
 	if IS_START then
-		Socket:send(Build.serverOnline())
+		Buf:add(Build.serverOnline())
 	else
-		Socket:send(Build.serverReload())
+		Buf:add(Build.serverReload())
 	end
 	
 	-- hotreload
