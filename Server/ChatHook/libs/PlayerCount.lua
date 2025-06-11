@@ -15,7 +15,13 @@ M.add = function(player_id)
 end
 
 M.remove = function(player_id)
+	if not M.exists(player_id) then return end
 	PLAYERS[player_id] = nil
+	return true
+end
+
+M.exists = function(player_id)
+	return PLAYERS[player_id] ~= nil
 end
 
 M.count = function()

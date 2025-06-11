@@ -5,7 +5,7 @@ local PlayerCount = require("libs/PlayerCount")
 local M = {
 	SERVER_NAME = "",
 	MAX_PLAYERS = 0,
-	VERSION = 2,
+	VERSION = 3,
 }
 
 local function tableSize(table)
@@ -84,6 +84,15 @@ M.serverReload = function()
 	}
 end
 
+M.playerJoining = function(player_id)
+	return {
+		type = 7,
+		content = {
+			player_name = MP.GetPlayerName(player_id)
+		}
+	}
+end
+
 M.playerJoin = function(player_id)
 	return {
 		type = 3,
@@ -93,11 +102,12 @@ M.playerJoin = function(player_id)
 	}
 end
 
-M.playerLeft = function(player_id)
+M.playerLeft = function(player_id, early)
 	return {
 		type = 4,
 		content = {
-			player_name = MP.GetPlayerName(player_id)
+			player_name = MP.GetPlayerName(player_id),
+			early = early
 		}
 	}
 end

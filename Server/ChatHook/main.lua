@@ -84,14 +84,18 @@ function onScriptMessage(message, script_ref)
 	Buf:add(Build.scriptMessage(script_ref, message))
 end
 
+function onPlayerConnecting(player_id)
+	Buf:add(Build.playerJoining(player_id))
+end
+
 function onPlayerJoin(player_id)
 	PlayerCount.add(player_id)
 	Buf:add(Build.playerJoin(player_id))
 end
 
 function onPlayerDisconnect(player_id)
-	PlayerCount.remove(player_id)
-	Buf:add(Build.playerLeft(player_id))
+	local was_synced = PlayerCount.remove(player_id)
+	Buf:add(Build.playerLeft(player_id, not was_synced))
 end
 
 -- ----------------------------------------------------------------------
@@ -154,6 +158,7 @@ function onInit()
 	Log.ok('> Initizalized UDPSocket', SCRIPT_REF)
 	
 	MP.RegisterEvent("onChatMessage", "onChatMessage")
+	MP.RegisterEvent("onPlayerConnecting", "onPlayerConnecting")
 	MP.RegisterEvent("onPlayerJoin", "onPlayerJoin")
 	MP.RegisterEvent("onPlayerDisconnect", "onPlayerDisconnect")
 	MP.RegisterEvent("onScriptMessage", "onScriptMessage")

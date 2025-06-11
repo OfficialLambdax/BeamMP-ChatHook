@@ -11,7 +11,8 @@ use discord_webhook_rs as webhook;
 use webhook::{Webhook, Embed, Field};
 
 const AVATAR_URL: &str = "https://apache.neverless.dev/random/dc_logo.jpg";
-const VERSION: u8 = 2;
+const VERSION: u8 = 1;
+const PROTOCOL_VERSION: u8 = 3;
 
 struct Messages {
 	pub from_server: String,
@@ -36,6 +37,10 @@ struct Chat {
 	pub chat_message: String,
 }
 
+struct PlayerJoining {
+	pub player_name: String,
+}
+
 struct PlayerJoin {
 	pub player_name: String,
 	pub profile_pic_url: String,
@@ -44,6 +49,7 @@ struct PlayerJoin {
 
 struct PlayerLeft {
 	pub player_name: String,
+	pub early: bool,
 }
 
 fn main() -> Result<()> {
@@ -51,6 +57,7 @@ fn main() -> Result<()> {
 	let udp_port: u16 = env::var("UDP_PORT").unwrap().parse::<u16>().unwrap();
 
 	println!("Version {}", VERSION);
+	println!("Protocol Version {}", PROTOCOL_VERSION);
 	println!("Listening to 0.0.0.0:{}", &udp_port);
 	println!("Sending to: {}", &webhook_url);
 
@@ -76,6 +83,7 @@ fn main() -> Result<()> {
 						let mut script_buf = String::new();
 						for content in &messages.contents {
 							handleMessage(&webhook_url, &messages, &content, &mut profile_cache, &mut script_buf);
+							if messages.add_server_name {messages.add_server_name = false} // the first message from the buf would receive the header, the following not
 						}
 
 						if script_buf.len() > 0 {
@@ -142,7 +150,16 @@ fn handleMessage(webhook_url: &str, message: &Messages, content: &Content, profi
 			if let Ok(chat) = decodeScriptMessage(&content) {
 				sendScriptMessage(&message, chat, script_buf)
 			} else {
-				eprintln!("Invalid format for chat message from {}", &message.from_server);
+				eprintln!("Invalid format for script message from {}", &message.from_server);
+			}
+		}
+		7 => {
+			if let Ok(player) = decodePlayerJoining(&content) {
+				if let Err(e) = sendPlayerJoining(webhook_url, &message, player) {
+					eprintln!("{:?}", e);
+				}
+			} else {
+				eprintln!("Invalid format for on player joining from {}", &message.from_server);
 			}
 		}
 		_ => {
@@ -159,6 +176,17 @@ fn defaultWebhookHeader(webhook_url: &str) -> Webhook {
 	Webhook::new(webhook_url)
 		.username("BeamMP ChatHook")
 		.avatar_url(AVATAR_URL)
+}
+
+fn sendPlayerJoining(webhook_url: &str, message: &Messages, player: PlayerJoining) -> Result<(), webhook::Error> {
+	let mut content = String::new();
+	if message.add_server_name {serverNameHeader(&mut content, &message.from_server)}
+	content.push_str(&format!("> - 🚪 ***{}** joining*", player.player_name));
+	defaultWebhookHeader(webhook_url)
+		.content(content)
+		.send()?;
+
+	Ok(())
 }
 
 fn sendPlayerJoin(webhook_url: &str, message: &Messages, player: PlayerJoin) -> Result<(), webhook::Error> {
@@ -183,7 +211,11 @@ fn sendPlayerJoin(webhook_url: &str, message: &Messages, player: PlayerJoin) -> 
 fn sendPlayerLeft(webhook_url: &str, message: &Messages, player: PlayerLeft) -> Result<(), webhook::Error> {
 	let mut content = String::new();
 	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
-	content.push_str(&format!("> - 🕵️ ***{}** left ({}/{})*", &player.player_name, &message.player_count, &message.player_max));
+	if !player.early {
+		content.push_str(&format!("> - 🕵️ ***{}** left ({}/{})*", &player.player_name, &message.player_count, &message.player_max));
+	} else {
+		content.push_str(&format!("> - 🕵️ ***{}** left during download ({}/{})*", &player.player_name, &message.player_count, &message.player_max));
+	}
 	defaultWebhookHeader(webhook_url)
 		.content(content)
 		.send()?;
@@ -272,7 +304,7 @@ fn decodeReceiveBuf(message: &str) -> Result<Messages> {
 	}
 
 	let version = decode["version"].as_u8().unwrap();
-	if version != VERSION {
+	if version != PROTOCOL_VERSION {
 		return Err(anyhow!("Invalid message pack version: {}", message));
 	}
 
@@ -319,6 +351,15 @@ fn decodeScriptMessage(content: &Content) -> Result<ScriptMessage, ()> {
 	})
 }
 
+fn decodePlayerJoining(content: &Content) -> Result<PlayerJoining, ()> {
+	let content = &content.content;
+	if !content["player_name"].is_string() {return Err(())}
+
+	Ok(PlayerJoining{
+		player_name: content["player_name"].as_str().unwrap().to_string()
+	})
+}
+
 fn decodePlayerJoin(content: &Content, profile_cache: &mut HashMap<String, String>) -> Result<PlayerJoin, ()> {
 	let content = &content.content;
 	if !content["player_name"].is_string() {return Err(())}
@@ -342,10 +383,11 @@ fn decodePlayerJoin(content: &Content, profile_cache: &mut HashMap<String, Strin
 
 fn decodePlayerLeft(content: &Content) -> Result<PlayerLeft, ()> {
 	let content = &content.content;
-	if !content["player_name"].is_string() {return Err(())}
+	if !content["player_name"].is_string() || !content["early"].is_boolean() {return Err(())}
 
 	Ok(PlayerLeft{
-		player_name: content["player_name"].as_str().unwrap().to_string()
+		player_name: content["player_name"].as_str().unwrap().to_string(),
+		early: content["early"].as_bool().unwrap(),
 	})
 }
 
