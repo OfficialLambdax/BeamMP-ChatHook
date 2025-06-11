@@ -18,6 +18,7 @@ struct Messages {
 	pub from_server: String,
 	pub player_count: i32,
 	pub player_max: i32,
+	pub player_dif: i32,
 	pub add_server_name: bool,
 	pub contents: Vec<Content>,
 }
@@ -201,7 +202,7 @@ fn sendPlayerJoin(webhook_url: &str, message: &Messages, player: PlayerJoin) -> 
 				.add_field(
 					Field::new()
 						.name("🧡 New Player Join!")
-						.value(format!("→ [{}](https://forum.beammp.com/u/{})\n\n-# {}/{} Players", &player.player_name, &player.player_name, &message.player_count, &message.player_max))
+						.value(format!("→ [{}](https://forum.beammp.com/u/{})\n\n-# {}/{} Players ♦ {} Qued", &player.player_name, &player.player_name, &message.player_count, &message.player_max, &message.player_dif))
 				)
 		).send()?;
 
@@ -299,7 +300,7 @@ fn evalProfilePicture(player_name: &str, profile_cache: &mut HashMap<String, Str
 fn decodeReceiveBuf(message: &str) -> Result<Messages> {
 	let decode = jzon::parse(message)?;
 	if !decode.is_object() {return Err(anyhow!("Message is not of type object"))}
-	if !decode["server_name"].is_string() || !decode["player_count"].is_number() || !decode["player_max"].is_number() || !decode["version"].is_number() || !decode["contents"].is_array() {
+	if !decode["server_name"].is_string() || !decode["player_count"].is_number() || !decode["player_max"].is_number() || !decode["player_dif"].is_number() || !decode["version"].is_number() || !decode["contents"].is_array() {
 		return Err(anyhow!("Invalid message pack format: {}", message));
 	}
 
@@ -324,6 +325,7 @@ fn decodeReceiveBuf(message: &str) -> Result<Messages> {
 		from_server: cleanseString(decode["server_name"].as_str().unwrap()),
 		player_count: decode["player_count"].as_i32().unwrap(),
 		player_max: decode["player_max"].as_i32().unwrap(),
+		player_dif: decode["player_dif"].as_i32().unwrap(),
 		add_server_name: false,
 		contents: contents,
 	})

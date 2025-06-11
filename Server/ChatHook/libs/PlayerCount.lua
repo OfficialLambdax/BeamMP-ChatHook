@@ -24,6 +24,10 @@ M.exists = function(player_id)
 	return PLAYERS[player_id] ~= nil
 end
 
+M.dif = function()
+	return tableSize(MP.GetPlayers() or {}) - M.count()
+end
+
 M.count = function()
 	return tableSize(PLAYERS)
 end

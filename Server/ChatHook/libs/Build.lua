@@ -24,6 +24,7 @@ local function baseBuild()
 	return {
 		server_name = M.SERVER_NAME,
 		player_count = PlayerCount.count(),
+		player_dif = PlayerCount.dif(),
 		player_max = M.MAX_PLAYERS,
 		version = M.VERSION
 	}
