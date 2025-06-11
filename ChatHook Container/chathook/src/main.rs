@@ -79,6 +79,9 @@ fn main() -> Result<()> {
 						}
 
 						if script_buf.len() > 0 {
+							if messages.add_server_name {
+								script_buf.insert_str(0, &format!("> ↓↓↓ __**{}**__ ↓↓↓\n", messages.from_server));
+							}
 							script_buf.pop();
 							if let Err(e) = defaultWebhookHeader(&webhook_url).content(script_buf).send() {
 								eprintln!("{:?}", e);
