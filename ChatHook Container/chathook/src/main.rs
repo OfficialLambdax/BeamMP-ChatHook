@@ -19,7 +19,6 @@ struct Messages {
 	pub player_count: i32,
 	pub player_max: i32,
 	pub player_dif: i32,
-	pub add_server_name: bool,
 	pub contents: Vec<Content>,
 }
 
@@ -63,10 +62,9 @@ fn main() -> Result<()> {
 	println!("Sending to: {}", &webhook_url);
 
     let mut profile_cache: HashMap<String, String> = HashMap::new();
-	let mut last_server_name = String::new();
 	let socket = openUdpListener(udp_port, false)?;
 
-	let _ = defaultWebhookHeader(&webhook_url)
+	let _ = defaultWebhookHeader(&webhook_url, "BeamMP ChatHook")
 		.content(&format!("### 🌺 Hello from [*BeamMP ChatHook*](https://github.com/OfficialLambdax/BeamMP-ChatHook) v{} o/", VERSION))
 		.send(); // we let it fail
 
@@ -75,24 +73,15 @@ fn main() -> Result<()> {
 			Ok(receive) => {
 				//println!("{}", &receive);
 				match decodeReceiveBuf(&receive) {
-					Ok(mut messages) => {
-						if last_server_name != messages.from_server {
-							messages.add_server_name = true;
-							last_server_name = messages.from_server.clone();
-						}
-
+					Ok(messages) => {
 						let mut script_buf = String::new();
 						for content in &messages.contents {
 							handleMessage(&webhook_url, &messages, &content, &mut profile_cache, &mut script_buf);
-							if messages.add_server_name {messages.add_server_name = false} // the first message from the buf would receive the header, the following not
 						}
 
 						if script_buf.len() > 0 {
-							if messages.add_server_name {
-								script_buf.insert_str(0, &format!("> ↓↓↓ __**{}**__ ↓↓↓\n", messages.from_server));
-							}
 							script_buf.pop();
-							if let Err(e) = defaultWebhookHeader(&webhook_url).content(script_buf).send() {
+							if let Err(e) = defaultWebhookHeader(&webhook_url, &messages.from_server).content(script_buf).send() {
 								eprintln!("{:?}", e);
 							}
 						}
@@ -149,7 +138,7 @@ fn handleMessage(webhook_url: &str, message: &Messages, content: &Content, profi
 		}
 		6 => {
 			if let Ok(chat) = decodeScriptMessage(&content) {
-				sendScriptMessage(&message, chat, script_buf)
+				sendScriptMessage(chat, script_buf)
 			} else {
 				eprintln!("Invalid format for script message from {}", &message.from_server);
 			}
@@ -169,21 +158,17 @@ fn handleMessage(webhook_url: &str, message: &Messages, content: &Content, profi
 	}
 }
 
-fn serverNameHeader(content: &mut String, server_name: &str) {
-	content.push_str(&format!("> ↓↓↓ __**{}**__ ↓↓↓\n", server_name));
-}
-
-fn defaultWebhookHeader(webhook_url: &str) -> Webhook {
+fn defaultWebhookHeader(webhook_url: &str, server_name: &str) -> Webhook {
 	Webhook::new(webhook_url)
-		.username("BeamMP ChatHook")
+		//.username("BeamMP ChatHook")
+		.username(server_name)
 		.avatar_url(AVATAR_URL)
 }
 
 fn sendPlayerJoining(webhook_url: &str, message: &Messages, player: PlayerJoining) -> Result<(), webhook::Error> {
 	let mut content = String::new();
-	if message.add_server_name {serverNameHeader(&mut content, &message.from_server)}
-	content.push_str(&format!("> - 🚪 ***{}** joining*", player.player_name));
-	defaultWebhookHeader(webhook_url)
+	content.push_str(&format!("> - 🕵️ ***{}** joining*", player.player_name));
+	defaultWebhookHeader(webhook_url, &message.from_server)
 		.content(content)
 		.send()?;
 
@@ -191,10 +176,8 @@ fn sendPlayerJoining(webhook_url: &str, message: &Messages, player: PlayerJoinin
 }
 
 fn sendPlayerJoin(webhook_url: &str, message: &Messages, player: PlayerJoin) -> Result<(), webhook::Error> {
-	let mut content = String::new();
-	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
-	defaultWebhookHeader(webhook_url)
-		.content(content)
+	defaultWebhookHeader(webhook_url, &message.from_server)
+		.content("")
 		.add_embed(
 			Embed::new()
 				.thumbnail(player.profile_pic_url)
@@ -211,13 +194,12 @@ fn sendPlayerJoin(webhook_url: &str, message: &Messages, player: PlayerJoin) -> 
 
 fn sendPlayerLeft(webhook_url: &str, message: &Messages, player: PlayerLeft) -> Result<(), webhook::Error> {
 	let mut content = String::new();
-	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
 	if !player.early {
-		content.push_str(&format!("> - 🕵️ ***{}** left ({}/{})*", &player.player_name, &message.player_count, &message.player_max));
+		content.push_str(&format!("> - 🚪 ***{}** left ({}/{})*", &player.player_name, &message.player_count, &message.player_max));
 	} else {
-		content.push_str(&format!("> - 🕵️ ***{}** left during download ({}/{})*", &player.player_name, &message.player_count, &message.player_max));
+		content.push_str(&format!("> - 🚪 ***{}** left during download ({}/{})*", &player.player_name, &message.player_count, &message.player_max));
 	}
-	defaultWebhookHeader(webhook_url)
+	defaultWebhookHeader(webhook_url, &message.from_server)
 		.content(content)
 		.send()?;
 	
@@ -226,9 +208,8 @@ fn sendPlayerLeft(webhook_url: &str, message: &Messages, player: PlayerLeft) -> 
 
 fn sendChatMessage(webhook_url: &str, message: &Messages, chat: Chat) -> Result<(), webhook::Error> {
 	let mut content = String::new();
-	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
 	content.push_str(&format!("> - 💬 **{}:** {}", &chat.player_name, &chat.chat_message));
-	defaultWebhookHeader(webhook_url)
+	defaultWebhookHeader(webhook_url, &message.from_server)
 		.content(content)
 		.send()?;
 
@@ -236,9 +217,7 @@ fn sendChatMessage(webhook_url: &str, message: &Messages, chat: Chat) -> Result<
     Ok(())
 }
 
-fn sendScriptMessage(message: &Messages, chat: ScriptMessage, script_buf: &mut String)  {
-	let mut content = String::new();
-	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
+fn sendScriptMessage(chat: ScriptMessage, script_buf: &mut String)  {
 	if chat.script_ref.len() == 0 {
 		script_buf.push_str(&format!("> - ⚙️ **Server:** {}\n", cleanseString(&chat.chat_message)));
 	} else {
@@ -248,9 +227,8 @@ fn sendScriptMessage(message: &Messages, chat: ScriptMessage, script_buf: &mut S
 
 fn sendServerOnline(webhook_url: &str, message: &Messages) -> Result <(), webhook::Error> {
 	let mut content = String::new();
-	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
 	content.push_str(&format!("## ✅ Server has just (re)started!"));
-	defaultWebhookHeader(webhook_url)
+	defaultWebhookHeader(webhook_url, &message.from_server)
 		.content(content)
 		.send()?;
 	
@@ -259,9 +237,8 @@ fn sendServerOnline(webhook_url: &str, message: &Messages) -> Result <(), webhoo
 
 fn sendServerReload(webhook_url: &str, message: &Messages) -> Result<(), webhook::Error> {
 	let mut content = String::new();
-	if message.add_server_name {serverNameHeader(&mut content, &message.from_server);}
 	content.push_str(&format!("## ♻️ Server side script has reloaded"));
-	defaultWebhookHeader(webhook_url)
+	defaultWebhookHeader(webhook_url, &message.from_server)
 		.content(content)
 		.send()?;
 
@@ -326,7 +303,6 @@ fn decodeReceiveBuf(message: &str) -> Result<Messages> {
 		player_count: decode["player_count"].as_i32().unwrap(),
 		player_max: decode["player_max"].as_i32().unwrap(),
 		player_dif: decode["player_dif"].as_i32().unwrap(),
-		add_server_name: false,
 		contents: contents,
 	})
 }
