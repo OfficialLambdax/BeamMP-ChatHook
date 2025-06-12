@@ -15,5 +15,8 @@ strip = true        # Strip symbols from binary*
 discord-webhook-rs = "1.0.5"
 anyhow = "1.0.98"
 jzon = "0.12.5"
-reqwest = {version = "0.12.19", features = ["blocking"]}
+reqwest = {version = "0.12.20", features = ["blocking"]}
 base64 = "0.22.1"
+country-emoji = "0.2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.140"

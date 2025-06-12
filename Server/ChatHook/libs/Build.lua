@@ -98,7 +98,8 @@ M.playerJoin = function(player_id)
 	return {
 		type = 3,
 		content = {
-			player_name = MP.GetPlayerName(player_id)
+			player_name = MP.GetPlayerName(player_id),
+			ip = MP.GetPlayerIdentifiers(player_id).ip
 		}
 	}
 end

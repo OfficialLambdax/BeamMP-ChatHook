@@ -1,9 +1,12 @@
 // Made by Neverless @ BeamMP. Issues? Feel free to ask.
 #![allow(non_snake_case)]
 
+mod ipapi;
+
 use std::env;
 use std::{net::{SocketAddr, UdpSocket}};
 use std::collections::HashMap;
+
 use jzon;
 use base64::{Engine as _, engine::{general_purpose}};
 use anyhow::{Result, anyhow};
@@ -45,6 +48,8 @@ struct PlayerJoin {
 	pub player_name: String,
 	pub profile_pic_url: String,
 	pub profile_color: u32,
+	pub country_flag: String,
+	pub is_vpn: bool,
 }
 
 struct PlayerLeft {
@@ -63,6 +68,15 @@ fn main() -> Result<()> {
 
     let mut profile_cache: HashMap<String, String> = HashMap::new();
 	let socket = openUdpListener(udp_port, false)?;
+	let m_types: HashMap<i64, &str> = HashMap::from([
+		(1, "onChatMessage"),
+		(2, "onServerOnline"),
+		(3, "onPlayerJoin"),
+		(4, "onPlayerLeft"),
+		(5, "onServerReload"),
+		(6, "onScriptMessage"),
+		(7, "onPlayerJoining"),
+	]);
 
 	let _ = defaultWebhookHeader(&webhook_url, "BeamMP ChatHook")
 		.content(&format!("### 🌺 Hello from [*BeamMP ChatHook*](https://github.com/OfficialLambdax/BeamMP-ChatHook) v{} o/", VERSION))
@@ -76,7 +90,8 @@ fn main() -> Result<()> {
 					Ok(messages) => {
 						let mut script_buf = String::new();
 						for content in &messages.contents {
-							println!("Handled Type {} message for {}", content.m_type, messages.from_server);
+							let m_type = m_types.get(&content.m_type);
+							println!("Handling Type {} message for {}", if m_type.is_some() {m_type.unwrap()} else {"Unknown"}, messages.from_server);
 							handleMessage(&webhook_url, &messages, &content, &mut profile_cache, &mut script_buf);
 						}
 
@@ -159,6 +174,19 @@ fn handleMessage(webhook_url: &str, message: &Messages, content: &Content, profi
 	}
 }
 
+fn isGuest(player_name: &str) -> bool {
+	// guest5165468
+	// 5 7
+	if player_name.len() != 12 {return false}
+	if &player_name[..5] != "guest" {return false}
+	
+	let split: Vec<char> = player_name[5..12].chars().collect();
+	for char in split {
+		if !char.is_ascii_digit() {return false}
+	}
+	true
+}
+
 // unicode compatible
 fn cutServerName(server_name: &str) -> String {
 	if server_name.chars().count() <= 80 {return server_name.to_string()}
@@ -180,7 +208,7 @@ fn defaultWebhookHeader(webhook_url: &str, server_name: &str) -> Webhook {
 
 fn sendPlayerJoining(webhook_url: &str, message: &Messages, player: PlayerJoining) -> Result<(), webhook::Error> {
 	let mut content = String::new();
-	content.push_str(&format!("> -# - 🕵️ ***{}** joining*", player.player_name));
+	content.push_str(&format!("> -# - 🕵️ ***{}** joining {} Qued", player.player_name, &message.player_dif));
 	defaultWebhookHeader(webhook_url, &message.from_server)
 		.content(content)
 		.send()?;
@@ -189,6 +217,15 @@ fn sendPlayerJoining(webhook_url: &str, message: &Messages, player: PlayerJoinin
 }
 
 fn sendPlayerJoin(webhook_url: &str, message: &Messages, player: PlayerJoin) -> Result<(), webhook::Error> {
+	let content;
+	let mut vpn = "";
+	if player.is_vpn {vpn = " (VPN)"}
+
+	if isGuest(&player.player_name) {
+		content = format!("→ {} {}{}\n\n-# {}/{} Players ♦ {} Qued", &player.player_name, player.country_flag, vpn, &message.player_count, &message.player_max, &message.player_dif);
+	} else {
+		content = format!("→ [{}](https://forum.beammp.com/u/{}) {}{}\n\n-# {}/{} Players ♦ {} Qued", &player.player_name, &player.player_name, player.country_flag, vpn, &message.player_count, &message.player_max, &message.player_dif);
+	}
 	defaultWebhookHeader(webhook_url, &message.from_server)
 		.content("")
 		.add_embed(
@@ -198,7 +235,7 @@ fn sendPlayerJoin(webhook_url: &str, message: &Messages, player: PlayerJoin) -> 
 				.add_field(
 					Field::new()
 						.name("🧡 New Player Joined!")
-						.value(format!("→ [{}](https://forum.beammp.com/u/{})\n\n-# {}/{} Players ♦ {} Qued", &player.player_name, &player.player_name, &message.player_count, &message.player_max, &message.player_dif))
+						.value(content)
 				)
 		).send()?;
 
@@ -259,7 +296,7 @@ fn sendServerReload(webhook_url: &str, message: &Messages) -> Result<(), webhook
 }
 
 // --------------------------------------------------------------------------------
-// Profile pic cache
+// Profile pic cache and ip-api eval
 fn evalProfilePicture(player_name: &str, profile_cache: &mut HashMap<String, String>) -> String {
 	if profile_cache.contains_key(player_name) {return profile_cache.get(player_name).unwrap().to_string()}
 
@@ -353,7 +390,7 @@ fn decodePlayerJoining(content: &Content) -> Result<PlayerJoining, ()> {
 
 fn decodePlayerJoin(content: &Content, profile_cache: &mut HashMap<String, String>) -> Result<PlayerJoin, ()> {
 	let content = &content.content;
-	if !content["player_name"].is_string() {return Err(())}
+	if !content["player_name"].is_string() || !content["ip"].is_string() {return Err(())}
 
 	let player_name = content["player_name"].as_str().unwrap();
 	let chars = player_name.as_bytes();
@@ -365,10 +402,23 @@ fn decodePlayerJoin(content: &Content, profile_cache: &mut HashMap<String, Strin
 		color += val;
 	}
 
+	let mut country_flag = String::new();
+	let mut is_vpn = false;
+	let ip_api = ipapi::evalIPApi(content["ip"].as_str().unwrap());
+	if ip_api.is_err() {eprintln!("{}", ip_api.unwrap_err())} else {
+		let ip_api = ip_api.unwrap();
+		if let Some(flag) = country_emoji::flag(&ip_api.country_code) {
+			country_flag.push_str(&flag);
+		}
+		is_vpn = ip_api.hosting || ip_api.proxy;
+	}
+
 	Ok(PlayerJoin{
 		player_name: player_name.to_string(),
 		profile_pic_url: evalProfilePicture(player_name, profile_cache),
 		profile_color: color,
+		country_flag: country_flag,
+		is_vpn: is_vpn,
 	})
 }
 
