@@ -76,6 +76,7 @@ fn main() -> Result<()> {
 					Ok(messages) => {
 						let mut script_buf = String::new();
 						for content in &messages.contents {
+							println!("Handled Type {} message for {}", content.m_type, messages.from_server);
 							handleMessage(&webhook_url, &messages, &content, &mut profile_cache, &mut script_buf);
 						}
 
@@ -158,16 +159,28 @@ fn handleMessage(webhook_url: &str, message: &Messages, content: &Content, profi
 	}
 }
 
+// unicode compatible
+fn cutServerName(server_name: &str) -> String {
+	if server_name.chars().count() <= 80 {return server_name.to_string()}
+
+	let mut new = String::new();
+	let char_vec: Vec<char> = server_name.chars().collect();
+	for i in 0..77 {
+		new.push_str(&char_vec.get(i).unwrap().to_string());
+	}
+	new.push_str("...");
+	new
+}
+
 fn defaultWebhookHeader(webhook_url: &str, server_name: &str) -> Webhook {
 	Webhook::new(webhook_url)
-		//.username("BeamMP ChatHook")
-		.username(server_name)
+		.username(cutServerName(server_name))
 		.avatar_url(AVATAR_URL)
 }
 
 fn sendPlayerJoining(webhook_url: &str, message: &Messages, player: PlayerJoining) -> Result<(), webhook::Error> {
 	let mut content = String::new();
-	content.push_str(&format!("> - 🕵️ ***{}** joining*", player.player_name));
+	content.push_str(&format!("> -# - 🕵️ ***{}** joining*", player.player_name));
 	defaultWebhookHeader(webhook_url, &message.from_server)
 		.content(content)
 		.send()?;
@@ -184,7 +197,7 @@ fn sendPlayerJoin(webhook_url: &str, message: &Messages, player: PlayerJoin) -> 
 				.color(player.profile_color)
 				.add_field(
 					Field::new()
-						.name("🧡 New Player Join!")
+						.name("🧡 New Player Joined!")
 						.value(format!("→ [{}](https://forum.beammp.com/u/{})\n\n-# {}/{} Players ♦ {} Qued", &player.player_name, &player.player_name, &message.player_count, &message.player_max, &message.player_dif))
 				)
 		).send()?;
@@ -197,7 +210,7 @@ fn sendPlayerLeft(webhook_url: &str, message: &Messages, player: PlayerLeft) -> 
 	if !player.early {
 		content.push_str(&format!("> - 🚪 ***{}** left ({}/{})*", &player.player_name, &message.player_count, &message.player_max));
 	} else {
-		content.push_str(&format!("> - 🚪 ***{}** left during download ({}/{})*", &player.player_name, &message.player_count, &message.player_max));
+		content.push_str(&format!("> -# - 🚪 ***{}** left during download ({}/{})*", &player.player_name, &message.player_count, &message.player_max));
 	}
 	defaultWebhookHeader(webhook_url, &message.from_server)
 		.content(content)
