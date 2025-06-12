@@ -119,6 +119,7 @@ dependencies = [
  "country-emoji",
  "discord-webhook-rs",
  "jzon",
+ "once_cell",
  "reqwest 0.12.20",
  "serde",
  "serde_json",

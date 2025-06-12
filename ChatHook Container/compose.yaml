@@ -12,6 +12,7 @@ services:
     environment:
       - WEBHOOK_URL=${WEBHOOK_URL}
       - UDP_PORT=30813
+      - AVATAR_URL=${AVATAR_URL}
       
     volumes:
       - "./chathook:/chathook"

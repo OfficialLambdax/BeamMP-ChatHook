@@ -12,10 +12,14 @@ use base64::{Engine as _, engine::{general_purpose}};
 use anyhow::{Result, anyhow};
 use discord_webhook_rs as webhook;
 use webhook::{Webhook, Embed, Field};
+use once_cell::sync::OnceCell;
 
-const AVATAR_URL: &str = "https://apache.neverless.dev/random/dc_logo.jpg";
 const VERSION: u8 = 1;
 const PROTOCOL_VERSION: u8 = 3;
+
+static AVATAR_URL: OnceCell<String> = OnceCell::new();
+static WEBHOOK_URL: OnceCell<String> = OnceCell::new();
+static UDP_PORT: OnceCell<u16> = OnceCell::new();
 
 struct Messages {
 	pub from_server: String,
@@ -58,16 +62,19 @@ struct PlayerLeft {
 }
 
 fn main() -> Result<()> {
-	let webhook_url = env::var("WEBHOOK_URL").unwrap();
-	let udp_port: u16 = env::var("UDP_PORT").unwrap().parse::<u16>().unwrap();
+	WEBHOOK_URL.set(env::var("WEBHOOK_URL").unwrap()).unwrap();
+	UDP_PORT.set(env::var("UDP_PORT").unwrap().parse::<u16>().unwrap()).unwrap();
+	AVATAR_URL.set(env::var("AVATAR_URL").unwrap()).unwrap();
 
+	println!("Hello from ChatHook! o7");
 	println!("Version {}", VERSION);
 	println!("Protocol Version {}", PROTOCOL_VERSION);
-	println!("Listening to 0.0.0.0:{}", &udp_port);
-	println!("Sending to: {}", &webhook_url);
+	println!("Listening to 0.0.0.0:{}", UDP_PORT.get().unwrap());
+	println!("Sending to: {}", WEBHOOK_URL.get().unwrap());
+	println!("Avatar URL: {}", AVATAR_URL.get().unwrap());
 
     let mut profile_cache: HashMap<String, String> = HashMap::new();
-	let socket = openUdpListener(udp_port, false)?;
+	let socket = openUdpListener(UDP_PORT.get().unwrap().clone(), false)?;
 	let m_types: HashMap<i64, &str> = HashMap::from([
 		(1, "onChatMessage"),
 		(2, "onServerOnline"),
@@ -78,7 +85,7 @@ fn main() -> Result<()> {
 		(7, "onPlayerJoining"),
 	]);
 
-	let _ = defaultWebhookHeader(&webhook_url, "BeamMP ChatHook")
+	let _ = defaultWebhookHeader("BeamMP ChatHook")
 		.content(&format!("### 🌺 Hello from [*BeamMP ChatHook*](https://github.com/OfficialLambdax/BeamMP-ChatHook) v{} o/", VERSION))
 		.send(); // we let it fail
 
@@ -92,12 +99,12 @@ fn main() -> Result<()> {
 						for content in &messages.contents {
 							let m_type = m_types.get(&content.m_type);
 							println!("Handling Type {} message for {}", if m_type.is_some() {m_type.unwrap()} else {"Unknown"}, messages.from_server);
-							handleMessage(&webhook_url, &messages, &content, &mut profile_cache, &mut script_buf);
+							handleMessage(&messages, &content, &mut profile_cache, &mut script_buf);
 						}
 
 						if script_buf.len() > 0 {
 							script_buf.pop();
-							if let Err(e) = defaultWebhookHeader(&webhook_url, &messages.from_server).content(script_buf).send() {
+							if let Err(e) = defaultWebhookHeader(&messages.from_server).content(script_buf).send() {
 								eprintln!("{:?}", e);
 							}
 						}
@@ -112,12 +119,11 @@ fn main() -> Result<()> {
 
 // --------------------------------------------------------------------------------
 // Handle and do stuff
-//fn handleMessage(webhook_url: &str, mut message: Message, last_server_name: &mut String, profile_cache: &mut HashMap<String, String>) {
-fn handleMessage(webhook_url: &str, message: &Messages, content: &Content, profile_cache: &mut HashMap<String, String>, script_buf: &mut String) {
+fn handleMessage(message: &Messages, content: &Content, profile_cache: &mut HashMap<String, String>, script_buf: &mut String) {
 	match content.m_type {
 		1 => {
 			if let Ok(chat) = decodeChatMessage(&content) {
-				if let Err(e) = sendChatMessage(webhook_url, &message, chat) {
+				if let Err(e) = sendChatMessage(&message, chat) {
 					eprintln!("{:?}", e);
 				}
 			} else {
@@ -125,13 +131,13 @@ fn handleMessage(webhook_url: &str, message: &Messages, content: &Content, profi
 			}
 		},
 		2 => {
-			if let Err(e) = sendServerOnline(webhook_url, &message) {
+			if let Err(e) = sendServerOnline(&message) {
 				eprintln!("{:?}", e);
 			}
 		},
 		3 => {
 			if let Ok(player) = decodePlayerJoin(&content, profile_cache) {
-				if let Err(e) = sendPlayerJoin(webhook_url, &message, player) {
+				if let Err(e) = sendPlayerJoin(&message, player) {
 					eprintln!("{:?}", e);
 				}
 			} else {
@@ -140,7 +146,7 @@ fn handleMessage(webhook_url: &str, message: &Messages, content: &Content, profi
 		}
 		4 => {
 			if let Ok(player) = decodePlayerLeft(&content) {
-				if let Err(e) = sendPlayerLeft(webhook_url, &message, player) {
+				if let Err(e) = sendPlayerLeft(&message, player) {
 					eprintln!("{:?}", e);
 				}
 			} else {
@@ -148,7 +154,7 @@ fn handleMessage(webhook_url: &str, message: &Messages, content: &Content, profi
 			}
 		}
 		5 => {
-			if let Err(e) = sendServerReload(webhook_url, &message) {
+			if let Err(e) = sendServerReload(&message) {
 				eprintln!("{:?}", e);
 			}
 		}
@@ -161,7 +167,7 @@ fn handleMessage(webhook_url: &str, message: &Messages, content: &Content, profi
 		}
 		7 => {
 			if let Ok(player) = decodePlayerJoining(&content) {
-				if let Err(e) = sendPlayerJoining(webhook_url, &message, player) {
+				if let Err(e) = sendPlayerJoining(&message, player) {
 					eprintln!("{:?}", e);
 				}
 			} else {
@@ -200,23 +206,23 @@ fn cutServerName(server_name: &str) -> String {
 	new
 }
 
-fn defaultWebhookHeader(webhook_url: &str, server_name: &str) -> Webhook {
-	Webhook::new(webhook_url)
+fn defaultWebhookHeader(server_name: &str) -> Webhook {
+	Webhook::new(WEBHOOK_URL.get().unwrap())
 		.username(cutServerName(server_name))
-		.avatar_url(AVATAR_URL)
+		.avatar_url(AVATAR_URL.get().unwrap())
 }
 
-fn sendPlayerJoining(webhook_url: &str, message: &Messages, player: PlayerJoining) -> Result<(), webhook::Error> {
+fn sendPlayerJoining(message: &Messages, player: PlayerJoining) -> Result<(), webhook::Error> {
 	let mut content = String::new();
-	content.push_str(&format!("> -# - 🕵️ ***{}** joining {} Qued", player.player_name, &message.player_dif));
-	defaultWebhookHeader(webhook_url, &message.from_server)
+	content.push_str(&format!("> -# - 🕵️ ***{}** joining ({} Qued)*", player.player_name, &message.player_dif));
+	defaultWebhookHeader(&message.from_server)
 		.content(content)
 		.send()?;
 
 	Ok(())
 }
 
-fn sendPlayerJoin(webhook_url: &str, message: &Messages, player: PlayerJoin) -> Result<(), webhook::Error> {
+fn sendPlayerJoin(message: &Messages, player: PlayerJoin) -> Result<(), webhook::Error> {
 	let content;
 	let mut vpn = "";
 	if player.is_vpn {vpn = " (VPN)"}
@@ -226,7 +232,7 @@ fn sendPlayerJoin(webhook_url: &str, message: &Messages, player: PlayerJoin) -> 
 	} else {
 		content = format!("→ [{}](https://forum.beammp.com/u/{}) {}{}\n\n-# {}/{} Players ♦ {} Qued", &player.player_name, &player.player_name, player.country_flag, vpn, &message.player_count, &message.player_max, &message.player_dif);
 	}
-	defaultWebhookHeader(webhook_url, &message.from_server)
+	defaultWebhookHeader(&message.from_server)
 		.content("")
 		.add_embed(
 			Embed::new()
@@ -242,24 +248,24 @@ fn sendPlayerJoin(webhook_url: &str, message: &Messages, player: PlayerJoin) -> 
 	Ok(())
 }
 
-fn sendPlayerLeft(webhook_url: &str, message: &Messages, player: PlayerLeft) -> Result<(), webhook::Error> {
+fn sendPlayerLeft(message: &Messages, player: PlayerLeft) -> Result<(), webhook::Error> {
 	let mut content = String::new();
 	if !player.early {
 		content.push_str(&format!("> - 🚪 ***{}** left ({}/{})*", &player.player_name, &message.player_count, &message.player_max));
 	} else {
 		content.push_str(&format!("> -# - 🚪 ***{}** left during download ({}/{})*", &player.player_name, &message.player_count, &message.player_max));
 	}
-	defaultWebhookHeader(webhook_url, &message.from_server)
+	defaultWebhookHeader(&message.from_server)
 		.content(content)
 		.send()?;
 	
 	Ok(())
 }
 
-fn sendChatMessage(webhook_url: &str, message: &Messages, chat: Chat) -> Result<(), webhook::Error> {
+fn sendChatMessage(message: &Messages, chat: Chat) -> Result<(), webhook::Error> {
 	let mut content = String::new();
 	content.push_str(&format!("> - 💬 **{}:** {}", &chat.player_name, &chat.chat_message));
-	defaultWebhookHeader(webhook_url, &message.from_server)
+	defaultWebhookHeader(&message.from_server)
 		.content(content)
 		.send()?;
 
@@ -275,20 +281,20 @@ fn sendScriptMessage(chat: ScriptMessage, script_buf: &mut String)  {
 	}
 }
 
-fn sendServerOnline(webhook_url: &str, message: &Messages) -> Result <(), webhook::Error> {
+fn sendServerOnline(message: &Messages) -> Result <(), webhook::Error> {
 	let mut content = String::new();
 	content.push_str(&format!("## ✅ Server has just (re)started!"));
-	defaultWebhookHeader(webhook_url, &message.from_server)
+	defaultWebhookHeader(&message.from_server)
 		.content(content)
 		.send()?;
 	
 	Ok(())
 }
 
-fn sendServerReload(webhook_url: &str, message: &Messages) -> Result<(), webhook::Error> {
+fn sendServerReload(message: &Messages) -> Result<(), webhook::Error> {
 	let mut content = String::new();
 	content.push_str(&format!("## ♻️ Server side script has reloaded"));
-	defaultWebhookHeader(webhook_url, &message.from_server)
+	defaultWebhookHeader(&message.from_server)
 		.content(content)
 		.send()?;
 
