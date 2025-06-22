@@ -6,7 +6,6 @@ services:
     container_name: "beammp.chathook"
     ports:
       - ${EXPOSE_TO_NETWORK}:${UDP_PORT}:30813/udp
-      #- ${UDP_PORT}:30813/udp
     network_mode: bridge
     restart: unless-stopped
     environment:

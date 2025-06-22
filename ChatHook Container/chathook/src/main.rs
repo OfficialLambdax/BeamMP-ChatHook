@@ -301,6 +301,7 @@ fn sendServerReload(message: &Messages) -> Result<(), webhook::Error> {
 // --------------------------------------------------------------------------------
 // Profile pic cache and ip-api eval
 fn evalProfilePicture(player_name: &str, profile_cache: &mut HashMap<String, String>) -> String {
+	if isGuest(player_name) {return String::new()}
 	if profile_cache.contains_key(player_name) {return profile_cache.get(player_name).unwrap().to_string()}
 
 	let mut profile_pic_url = String::new();
