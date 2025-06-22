@@ -2,7 +2,7 @@
 ## A discord tool that posts your Server *happenings* to a discord Webhook!
 
 
-## Featuring
+# Featuring
 ### - Server (re)starts!
 ![img](img/server_restart.jpg)
 
@@ -35,7 +35,7 @@ You can send Script messages to the webhook by simply doing. Full discord format
 MP.TriggerGlobalEvent("onScriptMessage", "__**My Fancy Script message**__", "Script Name")
 ```
 
-## How to install
+# How to install
 ### ChatHook
 ChatHook is a tool that runs independent from a BeamMP Server. All your BeamMP Servers can send it data with the Server side script (Instructions below).
 
