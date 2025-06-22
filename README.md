@@ -30,7 +30,7 @@
 - Chat Commands starting with a `/` are automatically ignored!
 
 ## For modders
-You can send Script messages to the webhook by simply doing. Full discord formatting support (even links!).
+You can send Script messages to the webhook by simply doing this (Full discord formatting support including links!).
 ```lua
 MP.TriggerGlobalEvent("onScriptMessage", "__**My Fancy Script message**__", "Script Name")
 ```
@@ -63,8 +63,8 @@ AVATAR_URL=https://my-website.com/myImage.jpg
 
 Edit these variables to your liking, save and then exit.
 
-5. Next open a Terminal in this directory.
-6. And simply install the container with `sudo docker compose up -d`
+4. Next open a Terminal in this directory.
+5. And simply install the container with `sudo docker compose up -d`
 
 ![img](img/container_startup.jpg)
 
@@ -84,7 +84,7 @@ Note: The Container is build in a self compiling way. Which means that updating 
 5. Within the `target/release` folder is the `chathook.exe`
 
 To run it you can setup an autostart in your Operating System.
-It will read the necessary information such as the webhook url from the environment. Setting environment envirables is different per Distribution (You will have to look this up).
+It will read the necessary information such as the webhook url from the environment. Setting environment envariables is different per Distribution (You will have to look this up).
 
 **Environment Variables**
 ```
@@ -131,3 +131,5 @@ Then save and exit.
 ![img](img/mp_server_startup.jpg)
 
 **If everything is setup right then you can now see the Server started message in your discord (:**
+
+Note: The Serverside script is Hotreload safe.
