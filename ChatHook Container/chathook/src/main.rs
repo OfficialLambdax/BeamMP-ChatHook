@@ -66,12 +66,9 @@ fn main() -> Result<()> {
 	UDP_PORT.set(env::var("UDP_PORT").unwrap().parse::<u16>().unwrap()).unwrap();
 	AVATAR_URL.set(env::var("AVATAR_URL").unwrap()).unwrap();
 
-	println!("Hello from ChatHook! o7");
-	println!("Version {}", VERSION);
-	println!("Protocol Version {}", PROTOCOL_VERSION);
-	println!("Listening to 0.0.0.0:{}", UDP_PORT.get().unwrap());
-	println!("Sending to: {}", WEBHOOK_URL.get().unwrap());
-	println!("Avatar URL: {}", AVATAR_URL.get().unwrap());
+	println!("Hello from ChatHook! o7\nChatHook Version {}\nProtocol Version {}\nListening on 0.0.0.0:{}\nSending to: {}\nAvatar URL: {}",
+		VERSION, PROTOCOL_VERSION, UDP_PORT.get().unwrap(), WEBHOOK_URL.get().unwrap(), AVATAR_URL.get().unwrap()
+	);
 
     let mut profile_cache: HashMap<String, String> = HashMap::new();
 	let socket = openUdpListener(UDP_PORT.get().unwrap().clone(), false)?;
@@ -371,7 +368,7 @@ fn decodeChatMessage(content: &Content) -> Result<Chat, ()> {
 
 	Ok(Chat{
 		player_name: content["player_name"].as_str().unwrap().to_string(),
-		chat_message: content["chat_message"].as_str().unwrap().replace("@", "")
+		chat_message: content["chat_message"].as_str().unwrap().replace("@", "").replace("http://", "").replace("https://", "").replace("discord.gg", "discord-gg")
 	})
 }
 
