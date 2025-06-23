@@ -84,13 +84,21 @@ Note: The Container is build in a self compiling way. Which means that updating 
 5. Within the `target/release` folder is the `chathook.exe`
 
 To run it you can setup an autostart in your Operating System.
-It will read the necessary information such as the webhook url from the environment. Setting environment envariables is different per Distribution (You will have to look this up).
+It will read the necessary information such as the webhook url from the environment or the given arguments.
+
+**Arguments**
+
+`chathook.exe webhook_url udp_port avatar_url`
+
+eg. `chathook.exe https://discord.com/api/webhooks/* 30814 https://my-website.com/myImage.jpg`
+
 
 **Environment Variables**
+
+Setting environment variables is different per Distribution (You will have to look this up).
 ```
 WEBHOOK_URL="https://discord.com/api/webhooks/*"
 UDP_PORT=30813
-EXPOSE_TO_NETWORK=127.0.0.1
 AVATAR_URL=https://my-website.com/myImage.jpg
 ```
 - `WEBHOOK_URL` defines the webhook url you got from discord.

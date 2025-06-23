@@ -62,9 +62,36 @@ struct PlayerLeft {
 }
 
 fn main() -> Result<()> {
-	WEBHOOK_URL.set(env::var("WEBHOOK_URL").unwrap()).unwrap();
-	UDP_PORT.set(env::var("UDP_PORT").unwrap().parse::<u16>().unwrap()).unwrap();
-	AVATAR_URL.set(env::var("AVATAR_URL").unwrap()).unwrap();
+	let args: Vec<String> = env::args().collect();
+	WEBHOOK_URL.set({
+		if let Ok(key) = env::var("WEBHOOK_URL") {
+			key
+		} else if let Some(key) = args.get(1) {
+			key.to_string()
+		} else {
+			panic!("Expected WEBHOOK_URL");
+		}
+	}).unwrap();
+
+	UDP_PORT.set({
+		if let Ok(key) = env::var("UDP_PORT") {
+			key
+		} else if let Some(key) = args.get(2) {
+			key.to_string()
+		} else {
+			panic!("Expected UDP_PORT");
+		}
+	}.parse::<u16>().unwrap()).unwrap();
+
+	AVATAR_URL.set({
+		if let Ok(key) = env::var("AVATAR_URL") {
+			key
+		} else if let Some(key) = args.get(3) {
+			key.to_string()
+		} else {
+			panic!("Expected AVATAR_URL")
+		}
+	}).unwrap();
 
 	println!("Hello from ChatHook! o7\nChatHook Version {}\nProtocol Version {}\nListening on 0.0.0.0:{}\nSending to: {}\nAvatar URL: {}",
 		VERSION, PROTOCOL_VERSION, UDP_PORT.get().unwrap(), WEBHOOK_URL.get().unwrap(), AVATAR_URL.get().unwrap()
