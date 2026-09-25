@@ -12,5 +12,5 @@ crate-type = ["cdylib"]
 [features]
 
 [dependencies]
-mlua = { version = "0.11.5 ", features = ["lua53","module"] }
-thiserror = "2.0.17"
+mlua = { version = "0.12.1 ", features = ["lua53","module"] }
+thiserror = "2.0.21"
