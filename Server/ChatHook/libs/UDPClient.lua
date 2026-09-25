@@ -52,6 +52,7 @@ return function(bin_path, ip, port)
 
 	local client
 	if os_name == "Linux" then
+		--package.loaded["rsocket"] = nil
 		local use_lib, lib = pcall(require, "rsocket")
 
 		if not use_lib then

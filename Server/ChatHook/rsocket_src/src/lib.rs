@@ -41,7 +41,7 @@ impl UserData for UdpClient {
                 dbg!("{}", e.kind());
                 match e.kind() {
                     std::io::ErrorKind::WouldBlock => return Ok(()),
-                    _ => return Err(error(GenericError::Send))
+                    _ => return Err(error(GenericError::Send)) // this crashes the beammp server in 3.9.1
                 }
             }
             Ok(())
